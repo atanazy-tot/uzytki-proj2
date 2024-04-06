@@ -68,7 +68,37 @@ class Satellite(Orbit):
         self.velocity = new_velocity
 
 
-    def observe(self, planet_radius):
+    def observe(wysokosc_orbity, szerokosc_geograficzna, dlugosc_geograficzna, szerokosc_pas):
+        """
+        Funkcja do obliczania obszaru widzenia satelity Pléiades na Ziemi.
+        
+        Parametry:
+        wysokosc_orbity (float): Wysokość orbity satelity nad Ziemią w kilometrach.
+        szerokosc_geograficzna (float): Szerokość geograficzna punktu nad którym znajduje się satelita.
+        dlugosc_geograficzna (float): Długość geograficzna punktu nad którym znajduje się satelita.
+        szerokosc_pas (float): Szerokość pasma (swath width) przy nadirze w kilometrach.
+        
+        Zwraca:
+        tuple: Kształt i rozmiar obszaru widzenia satelity na Ziemi.
+        """
+        # Promień Ziemi w kilometrach
+        promien_ziemi = 6371
+        
+        # Obliczenie kąta widzenia na podstawie szerokości pasma i wysokości orbity
+        kat_widzenia = 2 * np.arctan((szerokosc_pas / 2) / (wysokosc_orbity + promien_ziemi))
+        
+        # Obliczenie zasięgu widzenia na powierzchni Ziemi
+        zasieg_widzenia = wysokosc_orbity * np.tan(kat_widzenia / 2)
+        
+        # Obliczenie współrzędnych granicznych obszaru widzenia
+        gorna_granica = szerokosc_geograficzna + zasieg_widzenia / 111  # 1 stopień szerokości geograficznej to około 111 km
+        dolna_granica = szerokosc_geograficzna - zasieg_widzenia / 111
+        prawa_granica = dlugosc_geograficzna + zasieg_widzenia / (111 * np.cos(np.radians(szerokosc_geograficzna)))
+        lewa_granica = dlugosc_geograficzna - zasieg_widzenia / (111 * np.cos(np.radians(szerokosc_geograficzna)))
+        
+        return (gorna_granica, dolna_granica, prawa_granica, lewa_granica)
+
+    def observe2(self, planet_radius):
     
         # Obliczanie odległości do horyzontu z satelity
         odleglosc_do_horyzontu = math.sqrt(self.altitude * (2 * planet_radius + self.altitude))
