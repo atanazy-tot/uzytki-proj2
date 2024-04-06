@@ -25,7 +25,4 @@ def calculate_inclination(n: np.array, z=np.array([0, 0, 1])):
     return inclination_degrees
 
 
-# Przykład użycia
-n = np.array([1, 1, 1])  # Przykładowy wektor normalny do płaszczyzny orbity
-inclination = calculate_inclination(n)
-print(f"Inklinacja orbity: {inclination} stopni")
+
