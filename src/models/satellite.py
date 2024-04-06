@@ -70,9 +70,23 @@ class Satellite(Orbit):
         # Simulate the satellite taking an observation with its camera
         pass
 
-    def is_visible_from_station(self, latitude, longitude, altitude):
+    def is_visible_from_station(self, satellite_lat, satellite_long, satellite_alt, planet_radius):
         # Method to determine visibility from a ground station
-        pass
+        # Obliczanie odległości między odbiornikiem a satelitą
+        d_lat = math.radians(satellite_lat - receiver_lat)
+        d_lon = math.radians(satellite_lon - receiver_lon)
+        a = math.sin(d_lat/2) * math.sin(d_lat/2) + math.cos(math.radians(receiver_lat)) * math.cos(math.radians(satellite_lat)) * math.sin(d_lon/2) * math.sin(d_lon/2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        d = planet_radius * c
+    
+        # Obliczanie kąta między odbiornikiem a satelitą
+        angle_to_satellite = math.atan2(satellite_alt - receiver_alt, d)
+    
+        # Obliczanie kąta między odbiornikiem a horyzontem
+        angle_to_horizon = math.acos(planet_radius / (planet_radius + receiver_alt))
+
+        # Sprawdzanie, czy satelita jest widoczny
+        return angle_to_satellite < angle_to_horizon
 
 class OrbitPropagator:
     def __init__(self, satellite, start_time, end_time, time_step):
