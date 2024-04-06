@@ -61,14 +61,41 @@ class Satellite(Orbit):
         self.planet = planet
         self.position = None
         self.velocity = None
-
+        #ja bym dodał altitude, longtitude i to trzecie (wusokość nad planetą, szerokość i długość geograficzna
+    
     def update_position(self, new_position, new_velocity):
         self.position = new_position
         self.velocity = new_velocity
 
-    def observe(self):
-        # Simulate the satellite taking an observation with its camera
-        pass
+
+    def observe(self, planet_radius):
+    
+        # Obliczanie odległości do horyzontu z satelity
+        odleglosc_do_horyzontu = math.sqrt(self.altitude * (2 * planet_radius + self.altitude))
+    
+        # Obliczanie promienia obszaru widzenia satelity na powierzchni Ziemi
+        promien_obszaru = odleglosc_do_horyzontu * math.tan(math.radians(kat_widzenia / 2))
+    
+        # Przeliczenie promienia obszaru na stopnie geograficzne
+        radius_of_observe = math.degrees(promien_obszaru / planet_radius)
+    
+        return {
+            'srodek': {
+                'szerokosc_geograficzna': self.latitude,
+                'dlugosc_geograficzna': self.longtitude
+            },
+            'promien': radius_of_observe
+        }
+    
+    # Przykładowe użycie funkcji
+    szerokosc_geograficzna = 51.5074  # szerokość geograficzna Londynu
+    dlugosc_geograficzna = -0.1278  # długość geograficzna Londynu
+    wysokosc_satelity = 770  # wysokość satelity w kilometrach
+    kat_widzenia = 17.6  # kąt widzenia w stopniach
+    
+    print(obszar_widzenia_satelity(szerokosc_geograficzna, dlugosc_geograficzna, wysokosc_satelity, kat_widzenia))
+
+
 
     def is_visible_from_station(self, satellite_lat, satellite_long, satellite_alt, planet_radius):
         # Method to determine visibility from a ground station
