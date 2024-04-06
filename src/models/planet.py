@@ -16,6 +16,6 @@ class Planet:
 
     def is_satellite_visible(self, satellite):
         for station in self.ground_stations:
-            if satellite.is_visible_from_station(station.latitude, station.longitude, self.altitude, self.radius):
+            if satellite.is_visible_from_station(station.latitude, station.longitude, station.altitude, self.radius):
                 return True
         return False
