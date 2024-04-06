@@ -1,11 +1,21 @@
+class GroundStation:
+    def __init__(self, name, latitude, longitude):
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+
+
 class Planet:
-    def __init__(self, gravitational_constant, radius, j2):
-        """
-        Initializes a planet object with the necessary gravitational parameters.
-        :param gravitational_constant: Gravitational constant (G * M) for the planet in m^3/s^2
-        :param radius: Mean radius of the planet in meters
-        :param j2: Second zonal harmonic coefficient for the planet's gravitational field
-        """
-        self.gravitational_constant = gravitational_constant
+    def __init__(self, name, radius):
+        self.name = name
         self.radius = radius
-        self.j2 = j2
+        self.ground_stations = []
+
+    def add_ground_station(self, name, latitude, longitude):
+        self.ground_stations.append(GroundStation(name, latitude, longitude))
+
+    def is_satellite_visible(self, satellite):
+        for station in self.ground_stations:
+            if satellite.is_visible_from_station(station.latitude, station.longitude, self.radius):
+                return True
+        return False
