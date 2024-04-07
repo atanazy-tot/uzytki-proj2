@@ -68,8 +68,9 @@ class Satellite(Orbit):
         self.velocity = new_velocity
 
 
-    def observe(wysokosc_orbity, szerokosc_geograficzna, dlugosc_geograficzna, szerokosc_pas):
-        """
+    def observe_photo(wysokosc_orbity, szerokosc_geograficzna, dlugosc_geograficzna, szerokosc_pas):
+        
+        """ 
         Funkcja do obliczania obszaru widzenia satelity Pléiades na Ziemi.
         
         Parametry:
@@ -98,7 +99,7 @@ class Satellite(Orbit):
         
         return (gorna_granica, dolna_granica, prawa_granica, lewa_granica)
 
-    def observe2(self, planet_radius):
+    def observe_circle(self, planet_radius):
     
         # Obliczanie odległości do horyzontu z satelity
         odleglosc_do_horyzontu = math.sqrt(self.altitude * (2 * planet_radius + self.altitude))
