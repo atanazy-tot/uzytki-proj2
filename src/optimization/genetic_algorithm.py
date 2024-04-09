@@ -1,15 +1,20 @@
-class genetic_algorithm:
+import math
+import random
+import numpy as np
+
+class GeneticAlgorithm:
     def __init__(self,
                  ground_stations,
                  planet,
                  start_time,
                  end_time,
                  time_step,
-                 numSatellites: int,
+                 constellation_size: int,
                  popSize: int,
                  numParents: int,
                  pm: float,
-                 numIterations: int):
+                 k: int = 2,
+                 numIterations: int = 100):
 
         assert numParents % 2 == 0
 
@@ -18,67 +23,81 @@ class genetic_algorithm:
         self.start_time = start_time
         self.end_time = end_time
         self.time_step = time_step
-        self.numSatellites = numSatellites
+        self.constellation_size = constellation_size
         self.popSize = popSize
         self.numParents = numParents
-        self.pm = pm
+        self.pm = pm # prob. of mutation
+        self.k = k # for parent selection
         self.numIterations = numIterations
-        self.minimize = True
+        self.minimize = False # min/max evaluation function
 
-    def evaluation(self, satellites, ground_stations, planet, start_time, end_time, time_step): # In our case, we want to maximize coverage
+    def random_satellite(self):
+        semi_major_axis = random.uniform(self.planet.hs_lower_bound, self.planet.hs_upper_bound)
+        eccentricity = random.uniform(0, 0.01)
+        inclination = math.radians(98)  # typical for sun-synchronous orbits
+        raan = random.uniform(0, 2 * math.pi)
+        arg_of_perigee = random.uniform(0, 2 * math.pi)
+        true_anomaly = random.uniform(0, 2 * math.pi)
+
+        return Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly, self.planet)
+
+    def evaluation(self, constellation): # In our case, we want to maximize coverage
         self.minimize = False
-        c = CoverageSimulator(satellites, ground_stations, planet)
-        result = c.calculate_covarage(start_time, end_time, time_step)
+        c = CoverageSimulator(constellation, self.ground_stations, self.planet)
+        result = c.calculate_covarage(self.start_time, self.end_time, self.time_step)
         return result
 
-    def mutation(self, satellites):
+    def mutation(self, constellation):
+        for satellite in constellation:
+            p = random.random()
+            if p < self.pm: # pm - prob. of mutation
+                satellite.semi_major_axis += random.uniform(-10, 10)
+                satellite.semi_major_axis = max(min(satellite.semi_major_axis, satellite.planet.hs_upper_bound), satellite.planet.hs_lower_bound)
+                satellite.eccentricity += random.gauss(0, 0.01)
+                satellite.eccentricity = max(min(satellite.eccentricity, 1), 0)  # Eccentricity must be between 0 and 1
 
-        pass
+                satellite.raan = (satellite.raan + random.gauss(0, 0.01)) % (2 * math.pi)
+                satellite.arg_of_perigee = (satellite.arg_of_perigee + random.gauss(0, 0.01)) % (2 * math.pi)
+                satellite.true_anomaly = (satellite.true_anomaly + random.gauss(0, 0.01)) % (2 * math.pi)
 
-    def cross(self):
-        pass
+        return constellation
 
-    def select_parents(self, fitness, popSize, k = 2): # tournament selection
+    def cross(self, parent_1, parent_2): # one point crossover
+        crossover_point = random.randint(0, len(parent_1)) # parents have the same length (no. satellites)
+
+        child_1 = parent_1[:crossover_point] + parent_2[crossover_point:]
+        child_2 = parent_2[:crossover_point] + parent_1[crossover_point:]
+
+        return child_1, child_2
+
+    def select_parents(self, fitness): # tournament selection
         """
         Draws k individuals and returns the best one
         fitness -- fitness matrix for population
-        popSize -- population size
-        k -- number of participants in the tournament.
         """
-        candidates = random.sample(range(popSize), k)
-        arg = np.argmin(fitness[candidates]) if self.minimize else np.argmax(fitness[candidates])
-        return candidates[arg]
+        candidates = random.sample(range(self.popSize), self.k)
+        best_candidate = np.min(candidates, key=lambda x: fitness[x]) if self.minimize else max(candidates,
+                                                                                             key=lambda x: fitness[x])
+        return best_candidate
 
-    def survival(self,
-                 population: np.ndarray,
-                 fitness: np.ndarray,
-                 offspring: np.ndarray,
-                 fitnessOffspring: np.ndarray,
-                 popSize: int,
-                 permuSize: int) -> np.ndarray:
+    def survival(self, population, fitness, offspring, fitness_offspring):
         """
         finds survivors
-        population -- ,
-        fitness -- ,
-        offspring -- ,
-        fitnessOffspring -- ,
-        popSize -- population size,
-        permuSize -- permutation size
         """
-        currentGeneration = np.vstack((population, offspring))
-        fitnessGeneration = np.concatenate((fitness, fitnessOffspring))
+        current_generation = population.extend(offspring)
+        fitness_generation = fitness.extend(fitness_offspring)
 
-        order = np.argsort(fitnessGeneration)
+        order = sorted(range(len(fitness_generation)), key=lambda k: fitness_generation[k])
 
-        survivors = np.zeros([popSize, permuSize + 1])
-        survivors[:, :-1] = currentGeneration[order[:popSize]]
-        survivors[:, -1] = fitnessGeneration[order[:popSize]]
+        # Select the top individuals based on the fitness scores
+        survivors = [current_generation[i] for i in order[:self.popSize]]
+        fitness_survivors = [fitness_generation[i] for i in order[:self.popSize]]
 
-        return survivors
+        return survivors, fitness_survivors
 
     def geneticAlgorithm(self,
                          stop_crit: bool = True,
-                         stop_value: float = 1.0) -> np.ndarray:
+                         stop_value: float = 1.0)
         '''
         Genetic algorithm
         stop_crit -- True if the algorithm should be stopped when a certain value is reached
@@ -86,49 +105,43 @@ class genetic_algorithm:
         '''
 
         # Initial population
-        population = []
-        fitness = np.array([self.evaluation(satellites, self.ground_stations, self.planet, self.start_time, self.end_time, self.time_step) for satellites in population])
-        print("Initial:", "min = ", min(fitness), ", max = ", max(fitness), ", average = ", np.mean(fitness))
+        population = [self.random_satellite() for _ in range(self.constellation_size)]
+        fitness = [self.evaluation(constellation) for constellation in population]
+        print("Initial:", "min = ", np.min(fitness), ", max = ", np.max(fitness), ", average = ", np.mean(fitness))
 
         # Main loop. Stop criterion: number of iterations
-        for num_it in range(numIterations):
+        for num_it in range(self.numIterations):
             if stop_crit and (
-                    (minimize and min(fitness) == stop_value) or (not minimize and max(fitness) == stop_value)):
+                    (self.minimize and np.min(fitness) == stop_value) or (not self.minimize and np.max(fitness) == stop_value)):
                 break
 
-            offspringMatrix = np.zeros([numParents, permuSize])
+            offspring = []
 
-            for kk in range(numParents // 2):
+            for kk in range(self.numParents // 2):
                 # Parent selection
-                candidate1 = select_parents(fitness, popSize, *args, **kwargs)
-                candidate2 = select_parents(fitness, popSize, *args, **kwargs)
+                parent_1 = population[self.select_parents(fitness)]
+                parent_2 = population[self.select_parents(fitness)]
 
                 # Crossover
-                children = np.array(
-                    [cross(population[[candidate1, candidate2]], permuSize, copied_parent=0, *args, **kwargs),
-                     cross(population[[candidate1, candidate2]], permuSize, copied_parent=1, *args, **kwargs)])
+                child_1, child_2 = self.cross(parent_1, parent_2)
 
                 # Mutation
-                children = np.array([mutation(children[0], pm), mutation(children[0], pm)])
+                child_1 = self.mutation(child_1)
+                child_2 = self.mutation(child_2)
 
                 # Save the children
-                offspringMatrix[(kk * 2):(kk * 2 + 2), :] = children
+                offspring.extend([child_1, child_2])
 
             # Evaluation of children
-            fitnessChildren = np.array(
-                [evaluation(offspringMatrix[individual,], *args, **kwargs) for individual in range(numParents)])
+            fitness_offspring = [self.evaluation(constellation) for constellation in offspring]
 
             # Survivor selection
-            res = survival(population, fitness, offspringMatrix, fitnessChildren, popSize, permuSize, *args, **kwargs)
-            population = res[:, 0:permuSize]
-            fitness = res[:, permuSize]
+            population, fitness = self.survival(population, fitness, offspring, fitness_offspring)
 
             # Print info
-            print("Iteration ", num_it, ": min = ", min(fitness), ", max = ", max(fitness), ", average = ",
+            print("Iteration ", num_it, ": min = ", np.min(fitness), ", max = ", np.max(fitness), ", average = ",
                   np.mean(fitness))
 
-        arg = np.argmin(fitness) if minimize else np.argmax(fitness)
+        arg = np.argmin(fitness) if self.minimize else np.argmax(fitness)
 
         return population[arg]
-
-    pass

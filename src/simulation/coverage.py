@@ -1,3 +1,7 @@
+from shapely.ops import cascaded_union
+from shapely.geometry import Polygon
+
+
 class CoverageSimulator:
     def __init__(self, satellites, ground_stations, planet):
         self.satellites = satellites
@@ -20,6 +24,6 @@ class CoverageSimulator:
         # Calculate the proportion covered
         whole_map = Polygon([(-180, -90), (180, -90), (180, 90), (-180, 90)])
         map_area = whole_map.area
-        proportion_covered = total_area_covered / earth_surface_area
+        proportion_covered = total_area_covered / map_area
 
         return proportion_covered
