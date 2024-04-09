@@ -4,6 +4,7 @@ class GroundStation:
         self.latitude = latitude
         self.longitude = longitude
 
+
 class Planet:
     def __init__(self, name, radius, mu, rotation_period, j2, angular_velocity):
         self.name = name
@@ -24,6 +25,7 @@ class Planet:
             if satellite.is_visible_from_station(station.latitude, station.longitude, satellite.altitude, self.radius):
                 return True
         return False
+
 
 # Example of creating Earth and Moon with their respective constants
 earth = Planet(
