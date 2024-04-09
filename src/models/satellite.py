@@ -16,7 +16,7 @@ class Orbit:
 
     def to_state_vector(self):
         # Constants
-        mu = self.planet.mu # Earth’s gravitational parameter, km^3/s^2
+        mu = self.planet.mu  # Earth’s gravitational parameter, m^3/s^2
 
         # Position in perifocal coordinates
         p = self.semi_major_axis * (1 - self.eccentricity ** 2)
@@ -53,16 +53,18 @@ class Orbit:
 
 class Satellite(Orbit):
     def __init__(self, semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
-                 resolution, optical_bands, camera_fov, planet: Planet):
+                 resolution, optical_bands, camera_fov, swath_width, planet: Planet):
         super().__init__(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
                          planet)
         self.resolution = resolution
         self.optical_bands = optical_bands
+        self.swath_width = swath_width
         self.camera_fov = camera_fov
         self.position = None
         self.velocity = None
+        self.latitude = None
+        self.longitude = None
         self.altitude = None
-        #ja bym dodał altitude, longtitude i to trzecie (wysokość nad planetą, szerokość i długość geograficzna
     
     def update_position(self, latitude, longitude, altitude):
         self.latitude = latitude
@@ -229,14 +231,14 @@ class OrbitPropagator:
             longitude = (longitude + np.pi) % (2 * np.pi) - np.pi
 
             # Calculate latitude from the position
-            r = np.sqrt(x**2 + y**2 + z**2)
+            r = np.sqrt(x**2 + y**2 + z**2)  # that's just altitude bro
             latitude = np.arcsin(z / r)
 
             # Convert latitude and longitude to degrees
             latitude_deg = np.degrees(latitude)
             longitude_deg = np.degrees(longitude)
 
-            ground_track.append((latitude_deg, longitude_deg))
+            ground_track.append((latitude_deg, longitude_deg, r))
 
         return ground_track
 
