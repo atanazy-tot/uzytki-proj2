@@ -1,18 +1,22 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 from .planet import Planet
+from shapely.geometry import Polygon
+from shapely.ops import cascaded_union
 
 
 class Orbit:
     def __init__(self, semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
                  planet: Planet):
-        self.semi_major_axis = semi_major_axis  # in kilometers
+        self.semi_major_axis = semi_major_axis  # in meters
         self.eccentricity = eccentricity
         self.inclination = inclination  # in radians
         self.raan = raan  # Right Ascension of the Ascending Node, in radians
         self.arg_of_perigee = arg_of_perigee  # in radians
         self.true_anomaly = true_anomaly  # in radians
         self.planet = planet
+        self.trajectory = []
+        self.ground_track = []
 
     def to_state_vector(self):
         # Constants
@@ -49,27 +53,88 @@ class Orbit:
 
         return r_eci, v_eci
 
+    def calculate_orbital_period(self):
+        # Calculate the orbital period using Kepler's third law
+        T = 2 * np.pi * np.sqrt(self.semi_major_axis ** 3 / self.planet.mu)
+        return T
 
+    def propagate_orbit(self, start_time=0, end_time=calculate_orbital_period(), time_step=1):
+        # Define the differential equations for the two-body problem
+        def equations_of_motion(t, y):
+            # Constants
+            mu = self.planet.mu  # Earth’s gravitational parameter, m^3/s^2
+            J2 = self.planet.j2
+            radius = self.planet.radius  # Earth’s equatorial radius, m
+
+            # Unpack the position and velocity vectors
+            r_vec = y[:3]
+            v_vec = y[3:]
+            r = np.linalg.norm(r_vec)
+
+            # Two-body acceleration
+            acc_gravity = -mu * r_vec / r**3
+
+            # J2 perturbation
+            z2 = r_vec[2]**2
+            r2 = r**2
+            tx = r_vec[0] / r * (5 * z2 / r2 - 1)
+            ty = r_vec[1] / r * (5 * z2 / r2 - 1)
+            tz = r_vec[2] / r * (5 * z2 / r2 - 3)
+            acc_j2 = 1.5 * J2 * mu * radius**2 / r**4 * np.array([tx, ty, tz])
+
+            # Total acceleration
+            acc_total = acc_gravity + acc_j2
+
+            return np.hstack((v_vec, acc_total))
+
+        # Set the initial conditions for the integrator
+        y0 = np.hstack(self.to_state_vector())
+        t_span = (start_time, end_time)
+        t_eval = np.arange(start_time, end_time, time_step)
+
+        # Solve the system of differential equations
+        solution = solve_ivp(equations_of_motion, t_span, y0, t_eval=t_eval, rtol=1e-6)
+
+        # Store the results in the trajectory attribute
+        self.trajectory = solution.y
+        return solution.y
+
+    def calculate_ground_track(self, start_time=0, time_step=1):
+        # Earth's rotation rate (radians per second)
+        omega_earth = self.planet.angular_velocity
+
+        ground_track = []
+
+        for i in range(len(self.trajectory[0])):
+            x, y, z = self.trajectory[0][i], self.trajectory[1][i], self.trajectory[2][i]
+
+            # Calculate the current longitude, taking into account Earth's rotation
+            time = start_time + i * time_step
+            theta = (omega_earth * time) % (2 * np.pi)
+            longitude = np.arctan2(y, x) - theta
+            # Ensure longitude is between -pi and pi
+            longitude = (longitude + np.pi) % (2 * np.pi) - np.pi
+
+            # Calculate latitude from the position
+            r = np.sqrt(x**2 + y**2 + z**2)  # that's just altitude bro
+            latitude = np.arcsin(z / r)
+
+            # Convert latitude and longitude to degrees
+            latitude_deg = np.degrees(latitude)
+            longitude_deg = np.degrees(longitude)
+
+            ground_track.append((latitude_deg, longitude_deg, r))
+
+        self.ground_track = ground_track
+        return ground_track
 
 class Satellite(Orbit):
     def __init__(self, semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
-                 resolution, optical_bands, camera_fov, swath_width, planet: Planet):
+                 swath_width, planet: Planet):
         super().__init__(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
                          planet)
-        self.resolution = resolution
-        self.optical_bands = optical_bands
         self.swath_width = swath_width
-        self.camera_fov = camera_fov
-        self.position = None
-        self.velocity = None
-        self.latitude = None
-        self.longitude = None
-        self.altitude = None
-    
-    def update_position(self, latitude, longitude, altitude):
-        self.latitude = latitude
-        self.longitude = longitude
-        self.altitude = altitude
+
 
     def observe_area(self, orbit_height, geographic_latitude, geographic_longitude, swath_width):
         """
@@ -100,6 +165,38 @@ class Satellite(Orbit):
         left_boundary = geographic_longitude - visibility_range / (111 * np.cos(np.radians(geographic_latitude)))
 
         return (upper_boundary, lower_boundary, right_boundary, left_boundary)
+
+    def observe_shapely(self, orbit_altitude, geographic_latitude, geographic_longitude, swath_width):
+        # Earth's radius in METERS
+        earth_radius = self.planet.radius
+
+        # Calculate the field of view based on the swath width and orbit altitude
+        field_of_view = 2 * np.arctan((swath_width / 2) / (orbit_altitude + earth_radius))
+
+        # Calculate the range of view on the Earth's surface
+        range_of_view = orbit_altitude * np.tan(field_of_view / 2)
+
+        # Calculate the boundary coordinates of the viewing area
+        upper_boundary = geographic_latitude + range_of_view / 111  # 1 degree of geographic latitude is about 111 km
+        lower_boundary = geographic_latitude - range_of_view / 111
+        right_boundary = geographic_longitude + range_of_view / (111 * np.cos(np.radians(geographic_latitude)))
+        left_boundary = geographic_longitude - range_of_view / (111 * np.cos(np.radians(geographic_latitude)))
+
+        # Check if the rectangle crosses the -180/180 degree longitude boundary
+        if right_boundary > 180 or left_boundary < -180:
+            # Split the rectangle into two parts
+            right_rectangle = Polygon(
+                [(-180, lower_boundary), (right_boundary % 180, lower_boundary), (right_boundary % 180, upper_boundary),
+                 (-180, upper_boundary)])
+            left_rectangle = Polygon(
+                [(left_boundary % -180, lower_boundary), (180, lower_boundary), (180, upper_boundary),
+                 (left_boundary % -180, upper_boundary)])
+            return [right_rectangle, left_rectangle]
+        else:
+            # Return the original rectangle
+            return [Polygon(
+                [(left_boundary, lower_boundary), (right_boundary, lower_boundary), (right_boundary, upper_boundary),
+                 (left_boundary, upper_boundary)])]
 
     def observe_circle(self, planet_radius, viewing_angle_deg):
         """
@@ -164,82 +261,3 @@ class Satellite(Orbit):
         # Checking if the satellite is visible
         return angle_to_satellite < angle_to_horizon
 
-
-class OrbitPropagator:
-    def __init__(self, satellite, start_time, end_time, time_step):
-        self.satellite = satellite
-        self.start_time = start_time
-        self.end_time = end_time
-        self.time_step = time_step
-        self.trajectory = []
-
-    def propagate_orbit(self):
-        # Define the differential equations for the two-body problem
-        def equations_of_motion(t, y):
-            # Constants
-            mu = self.satellite.planet.mu  # Earth’s gravitational parameter, m^3/s^2
-            J2 = self.satellite.planet.J2
-            radius = self.satellite.planet.radius  # Earth’s equatorial radius, m
-
-            # Unpack the position and velocity vectors
-            r_vec = y[:3]
-            v_vec = y[3:]
-            r = np.linalg.norm(r_vec)
-
-            # Two-body acceleration
-            acc_gravity = -mu * r_vec / r**3
-
-            # J2 perturbation
-            z2 = r_vec[2]**2
-            r2 = r**2
-            tx = r_vec[0] / r * (5 * z2 / r2 - 1)
-            ty = r_vec[1] / r * (5 * z2 / r2 - 1)
-            tz = r_vec[2] / r * (5 * z2 / r2 - 3)
-            acc_j2 = 1.5 * J2 * mu * radius**2 / r**4 * np.array([tx, ty, tz])
-
-            # Total acceleration
-            acc_total = acc_gravity + acc_j2
-
-            return np.hstack((v_vec, acc_total))
-
-        # Set the initial conditions for the integrator
-        y0 = np.hstack(self.satellite.to_state_vector())
-        t_span = (self.start_time, self.end_time)
-        t_eval = np.arange(self.start_time, self.end_time, self.time_step)
-
-        # Solve the system of differential equations
-        solution = solve_ivp(equations_of_motion, t_span, y0, t_eval=t_eval, rtol=1e-6)
-
-        # Store the results in the trajectory attribute
-        self.trajectory = solution.y
-        return solution.y
-
-    def calculate_ground_track(self):
-        # Earth's rotation rate (radians per second)
-        omega_earth = self.satellite.planet.angular_velocity
-
-        ground_track = []
-
-        for i in range(len(self.trajectory[0])):
-            x, y, z = self.trajectory[0][i], self.trajectory[1][i], self.trajectory[2][i]
-
-            # Calculate the current longitude, taking into account Earth's rotation
-            time = self.start_time + i * self.time_step
-            theta = (omega_earth * time) % (2 * np.pi)
-            longitude = np.arctan2(y, x) - theta
-            # Ensure longitude is between -pi and pi
-            longitude = (longitude + np.pi) % (2 * np.pi) - np.pi
-
-            # Calculate latitude from the position
-            r = np.sqrt(x**2 + y**2 + z**2)  # that's just altitude bro
-            latitude = np.arcsin(z / r)
-
-            # Convert latitude and longitude to degrees
-            latitude_deg = np.degrees(latitude)
-            longitude_deg = np.degrees(longitude)
-
-            ground_track.append((latitude_deg, longitude_deg, r))
-
-        return ground_track
-
-# Further implementation would follow.
