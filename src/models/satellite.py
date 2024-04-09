@@ -2,7 +2,6 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from .planet import Planet
 from shapely.geometry import Polygon
-from shapely.ops import cascaded_union
 
 
 class Orbit:

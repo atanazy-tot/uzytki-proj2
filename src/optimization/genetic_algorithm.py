@@ -1,10 +1,11 @@
 import math
 import random
 import numpy as np
+from ..models.satellite import Satellite
+from ..simulation.coverage import CoverageSimulator
 
 class GeneticAlgorithm:
     def __init__(self,
-                 ground_stations,
                  planet,
                  start_time,
                  end_time,
@@ -18,8 +19,8 @@ class GeneticAlgorithm:
 
         assert numParents % 2 == 0
 
-        self.ground_stations = ground_stations
         self.planet = planet
+        self.ground_stations = self.parent.ground_stations
         self.start_time = start_time
         self.end_time = end_time
         self.time_step = time_step
@@ -51,7 +52,7 @@ class GeneticAlgorithm:
         for satellite in constellation:
             p = random.random()
             if p < self.pm: # pm - prob. of mutation
-                satellite.semi_major_axis += random.uniform(-10, 10)
+                satellite.semi_major_axis += random.uniform(-10000, 10000)
                 satellite.semi_major_axis = max(min(satellite.semi_major_axis, satellite.planet.hs_upper_bound), satellite.planet.hs_lower_bound)
                 satellite.eccentricity += random.gauss(0, 0.01)
                 satellite.eccentricity = max(min(satellite.eccentricity, 1), 0)  # Eccentricity must be between 0 and 1
