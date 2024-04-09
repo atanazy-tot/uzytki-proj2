@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 from .planet import Planet
+from shapely.geometry import Polygon
+from shapely.ops import cascaded_union
 
 
 class Orbit:
@@ -98,6 +100,38 @@ class Satellite(Orbit):
         lewa_granica = dlugosc_geograficzna - zasieg_widzenia / (111 * np.cos(np.radians(szerokosc_geograficzna)))
         
         return (gorna_granica, dolna_granica, prawa_granica, lewa_granica)
+
+    def observe_shapely(orbit_altitude, geographic_latitude, geographic_longitude, swath_width):
+        # Earth's radius in kilometers
+        earth_radius = 6371
+
+        # Calculate the field of view based on the swath width and orbit altitude
+        field_of_view = 2 * np.arctan((swath_width / 2) / (orbit_altitude + earth_radius))
+
+        # Calculate the range of view on the Earth's surface
+        range_of_view = orbit_altitude * np.tan(field_of_view / 2)
+
+        # Calculate the boundary coordinates of the viewing area
+        upper_boundary = geographic_latitude + range_of_view / 111  # 1 degree of geographic latitude is about 111 km
+        lower_boundary = geographic_latitude - range_of_view / 111
+        right_boundary = geographic_longitude + range_of_view / (111 * np.cos(np.radians(geographic_latitude)))
+        left_boundary = geographic_longitude - range_of_view / (111 * np.cos(np.radians(geographic_latitude)))
+
+        # Check if the rectangle crosses the -180/180 degree longitude boundary
+        if right_boundary > 180 or left_boundary < -180:
+            # Split the rectangle into two parts
+            right_rectangle = Polygon(
+                [(-180, lower_boundary), (right_boundary % 180, lower_boundary), (right_boundary % 180, upper_boundary),
+                 (-180, upper_boundary)])
+            left_rectangle = Polygon(
+                [(left_boundary % -180, lower_boundary), (180, lower_boundary), (180, upper_boundary),
+                 (left_boundary % -180, upper_boundary)])
+            return [right_rectangle, left_rectangle]
+        else:
+            # Return the original rectangle
+            return [Polygon(
+                [(left_boundary, lower_boundary), (right_boundary, lower_boundary), (right_boundary, upper_boundary),
+                 (left_boundary, upper_boundary)])]
 
     def observe_circle(self, planet_radius):
     
@@ -224,5 +258,17 @@ class OrbitPropagator:
             ground_track.append((latitude_deg, longitude_deg))
 
         return ground_track
+
+    def calculate_total_area(self):
+        total_area = []
+        for i in range(len(self.trajectory[0])):
+            x, y, z = self.trajectory[0][i], self.trajectory[1][i], self.trajectory[2][i]
+            r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+            latitude = np.arcsin(z / r)
+            longitude = np.arctan2(y, x)
+            area = self.observe_shapely(self.satellite.semi_major_axis - 6371, latitude, longitude,
+                                      self.satellite.szerokosc_pas)
+            total_area.extend(area)
+        return total_area
 
 # Further implementation would follow.
