@@ -70,6 +70,8 @@ class GeneticAlgorithm:
 
         return child_1, child_2
 
+
+
     def select_parents(self, fitness): # tournament selection
         """
         Draws k individuals and returns the best one
