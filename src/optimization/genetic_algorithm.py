@@ -1,8 +1,8 @@
 import math
 import random
 import numpy as np
-from ..models.satellite import Satellite
-from ..simulation.coverage import CoverageSimulator
+from src.models.satellite import Satellite
+from src.simulation.coverage import CoverageSimulator
 
 class GeneticAlgorithm:
     def __init__(self,
@@ -20,7 +20,7 @@ class GeneticAlgorithm:
         assert numParents % 2 == 0
 
         self.planet = planet
-        self.ground_stations = self.parent.ground_stations
+        self.ground_stations = self.planet.ground_stations
         self.start_time = start_time
         self.end_time = end_time
         self.time_step = time_step
@@ -39,13 +39,15 @@ class GeneticAlgorithm:
         raan = random.uniform(0, 2 * math.pi)
         arg_of_perigee = random.uniform(0, 2 * math.pi)
         true_anomaly = random.uniform(0, 2 * math.pi)
+        satellite = Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly, self.planet)
+        satellite.update_position(random.choice(range(len(satellite.ground_track))))
 
-        return Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly, self.planet)
+        return satellite
 
     def evaluation(self, constellation): # In our case, we want to maximize coverage
         self.minimize = False
-        c = CoverageSimulator(constellation, self.ground_stations, self.planet)
-        result = c.calculate_covarage(self.start_time, self.end_time, self.time_step)
+        c = CoverageSimulator(constellation)
+        result = c.calculate_coverage()
         return result
 
     def mutation(self, constellation):
@@ -60,6 +62,7 @@ class GeneticAlgorithm:
                 satellite.raan = (satellite.raan + random.gauss(0, 0.01)) % (2 * math.pi)
                 satellite.arg_of_perigee = (satellite.arg_of_perigee + random.gauss(0, 0.01)) % (2 * math.pi)
                 satellite.true_anomaly = (satellite.true_anomaly + random.gauss(0, 0.01)) % (2 * math.pi)
+                satellite.update_position(satellite.translation_factor + random.choice(list(range(-10, 10, 1))))
 
         return constellation
 
@@ -100,7 +103,7 @@ class GeneticAlgorithm:
 
     def geneticAlgorithm(self,
                          stop_crit: bool = True,
-                         stop_value: float = 1.0)
+                         stop_value: float = 1.0):
         '''
         Genetic algorithm
         stop_crit -- True if the algorithm should be stopped when a certain value is reached

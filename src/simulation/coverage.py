@@ -3,18 +3,16 @@ from shapely.geometry import Polygon
 
 
 class CoverageSimulator:
-    def __init__(self, satellites, ground_stations, planet):
+    def __init__(self, satellites):
         self.satellites = satellites
-        self.ground_stations = ground_stations
-        self.planet = planet
 
-    def calculate_coverage(self, start_time, end_time, time_step):
+    def calculate_coverage(self):
         tot_area = []
         for satellite in self.satelites:
-            p = OrbitPropagator(satellite, start_time, end_time, time_step)
-            p.propagate_orbit()
-            area = p.calculate_total_area()
-            tot_area.extend(area)
+            for i in range(len(satellite.sat_trajectory)):
+                altitude, latitude, longitude = satellite.sat_trajectory[i]
+                area = satellite.observe_shapely(altitude, latitude, longitude)
+                tot_area.append(area)
 
         total_area_polygon = cascaded_union(tot_area)
 

@@ -3,6 +3,7 @@ from scipy.integrate import solve_ivp
 from .planet import Planet
 from shapely.geometry import Polygon
 
+
 class Orbit:
     def __init__(self, semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
                  planet: Planet):
@@ -13,8 +14,8 @@ class Orbit:
         self.arg_of_perigee = arg_of_perigee  # in radians
         self.true_anomaly = true_anomaly  # in radians
         self.planet = planet
-        self.trajectory = []
-        self.ground_track = []
+        self.trajectory = self.propagate_orbit()
+        self.ground_track = self.calculate_ground_track()
 
     def to_state_vector(self):
         # Constants
@@ -94,7 +95,7 @@ class Orbit:
         solution = solve_ivp(equations_of_motion, t_span, y0, t_eval=t_eval, rtol=1e-6)
 
         # Store the results in the trajectory attribute
-        self.trajectory = solution.y
+        # self.trajectory = solution.y
         return solution.y
 
     def calculate_ground_track(self, start_time=0, time_step=1):
@@ -123,18 +124,40 @@ class Orbit:
 
             ground_track.append((latitude_deg, longitude_deg, r))
 
-        self.ground_track = ground_track
+        # self.ground_track = ground_track
         return ground_track
+
 
 class Satellite(Orbit):
     def __init__(self, semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
-                 swath_width, planet: Planet):
+                 planet: Planet, swath_width=800, translation_factor=0, time_span=900):
         super().__init__(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
                          planet)
         self.swath_width = swath_width
+        self.translation_factor = translation_factor  # index of element of ground_track
+        self.position = self.ground_track[translation_factor]  # position on ground_track
+        self.time_span = time_span  # time span for calculating the satellite's trajectory (900s = 15mins)
+        self.sat_trajectory = self.calculate_sat_trajectory()
+
+    def update_position(self, new_factor):
+        self.translation_factor = new_factor
+        self.position = self.ground_track[self.translation_factor]
+        self.sat_trajectory = self.calculate_sat_trajectory()
 
 
-    def observe_area(self, orbit_height, geographic_latitude, geographic_longitude, swath_width):
+    def calculate_sat_trajectory(self):
+        # Calculate the start and end indices
+        start_index = self.translation_factor % len(self.ground_track)
+        end_index = (self.translation_factor + self.time_span) % len(self.ground_track)
+
+        if end_index > start_index:
+            result = self.ground_track[start_index:end_index]
+        else:
+            result = self.ground_track[start_index:] + self.ground_track[:end_index]
+
+        return result
+
+    def observe_area(self, orbit_height, geographic_latitude, geographic_longitude):
         """
         Function to calculate the visibility area of a Pleiades satellite on Earth.
 
@@ -148,10 +171,10 @@ class Satellite(Orbit):
         tuple: Shape and size of the satellite's visibility area on Earth.
         """
         # Earth's radius in kilometers
-        earth_radius = 6371
+        radius = self.planet.radius
 
         # Calculate the viewing angle based on the swath width and orbit height
-        viewing_angle = 2 * np.arctan((swath_width / 2) / (orbit_height + earth_radius))
+        viewing_angle = 2 * np.arctan((self.swath_width / 2) / (orbit_height + radius))
 
         # Calculate the visibility range on the Earth's surface
         visibility_range = orbit_height * np.tan(viewing_angle / 2)
@@ -165,11 +188,10 @@ class Satellite(Orbit):
         return (upper_boundary, lower_boundary, right_boundary, left_boundary)
 
     def observe_shapely(self, orbit_altitude, geographic_latitude, geographic_longitude, swath_width):
-        # Earth's radius in METERS
-        earth_radius = self.planet.radius
+        radius = self.planet.radius
 
         # Calculate the field of view based on the swath width and orbit altitude
-        field_of_view = 2 * np.arctan((swath_width / 2) / (orbit_altitude + earth_radius))
+        field_of_view = 2 * np.arctan((swath_width / 2) / (orbit_altitude + radius))
 
         # Calculate the range of view on the Earth's surface
         range_of_view = orbit_altitude * np.tan(field_of_view / 2)
@@ -224,39 +246,7 @@ class Satellite(Orbit):
             'radius': radius_in_degrees
         }
 
-    def observe_shapely(self, orbit_altitude, geographic_latitude, geographic_longitude, swath_width):
-        # Earth's radius in kilometers
-        earth_radius = 6371
 
-        # Calculate the field of view based on the swath width and orbit altitude
-        field_of_view = 2 * np.arctan((swath_width / 2) / (orbit_altitude + earth_radius))
-
-        # Calculate the range of view on the Earth's surface
-        range_of_view = orbit_altitude * np.tan(field_of_view / 2)
-
-        # Calculate the boundary coordinates of the viewing area
-        upper_boundary = geographic_latitude + range_of_view / 111  # 1 degree of geographic latitude is about 111 km
-        lower_boundary = geographic_latitude - range_of_view / 111
-        right_boundary = geographic_longitude + range_of_view / (111 * np.cos(np.radians(geographic_latitude)))
-        left_boundary = geographic_longitude - range_of_view / (111 * np.cos(np.radians(geographic_latitude)))
-
-        # Check if the rectangle crosses the -180/180 degree longitude boundary
-        if right_boundary > 180 or left_boundary < -180:
-            # Split the rectangle into two parts
-            right_rectangle = Polygon(
-                [(-180, lower_boundary), (right_boundary % 180, lower_boundary), (right_boundary % 180, upper_boundary),
-                 (-180, upper_boundary)])
-            left_rectangle = Polygon(
-                [(left_boundary % -180, lower_boundary), (180, lower_boundary), (180, upper_boundary),
-                 (left_boundary % -180, upper_boundary)])
-            return [right_rectangle, left_rectangle]
-        else:
-            # Return the original rectangle
-            return [Polygon(
-                [(left_boundary, lower_boundary), (right_boundary, lower_boundary), (right_boundary, upper_boundary),
-                 (left_boundary, upper_boundary)])]
-
-    git add src/models/satellite.py
     def is_visible_from_station(self, satellite_lat, satellite_long, satellite_alt, receiver_lat, receiver_lon,
                                 receiver_alt, planet_radius):
         """
