@@ -20,9 +20,7 @@ class Planet:
 
     def is_satellite_visible(self, satellite):
         for station in self.ground_stations:
-            # Assuming the satellite class has an attribute 'altitude'
-            # and a method 'is_visible_from_station' correctly implemented.
-            if satellite.is_visible_from_station(station.latitude, station.longitude, satellite.altitude, self.radius):
+            if satellite.is_visible_from_station(satellite, self.radius):
                 return True
         return False
 
