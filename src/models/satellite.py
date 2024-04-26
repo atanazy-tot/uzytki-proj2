@@ -57,7 +57,7 @@ class Orbit:
         T = 2 * np.pi * np.sqrt(self.semi_major_axis ** 3 / self.planet.mu)
         return T
 
-    def propagate_orbit(self, start_time=0, end_time=calculate_orbital_period(), time_step=1):
+    def propagate_orbit(self, start_time=0, time_step=1):
         # Define the differential equations for the two-body problem
         def equations_of_motion(t, y):
             # Constants
@@ -88,8 +88,8 @@ class Orbit:
 
         # Set the initial conditions for the integrator
         y0 = np.hstack(self.to_state_vector())
-        t_span = (start_time, end_time)
-        t_eval = np.arange(start_time, end_time, time_step)
+        t_span = (start_time, self.calculate_orbital_period())
+        t_eval = np.arange(start_time, self.calculate_orbital_period(), time_step)
 
         # Solve the system of differential equations
         solution = solve_ivp(equations_of_motion, t_span, y0, t_eval=t_eval, rtol=1e-6)
@@ -140,10 +140,9 @@ class Satellite(Orbit):
         self.sat_trajectory = self.calculate_sat_trajectory()
 
     def update_position(self, new_factor):
-        self.translation_factor = new_factor
+        self.translation_factor = new_factor % len(self.ground_track)
         self.position = self.ground_track[self.translation_factor]
         self.sat_trajectory = self.calculate_sat_trajectory()
-
 
     def calculate_sat_trajectory(self):
         # Calculate the start and end indices
@@ -187,11 +186,11 @@ class Satellite(Orbit):
 
         return (upper_boundary, lower_boundary, right_boundary, left_boundary)
 
-    def observe_shapely(self, orbit_altitude, geographic_latitude, geographic_longitude, swath_width):
+    def observe_shapely(self, orbit_altitude, geographic_latitude, geographic_longitude):
         radius = self.planet.radius
 
         # Calculate the field of view based on the swath width and orbit altitude
-        field_of_view = 2 * np.arctan((swath_width / 2) / (orbit_altitude + radius))
+        field_of_view = 2 * np.arctan((self.swath_width / 2) / (orbit_altitude + radius))
 
         # Calculate the range of view on the Earth's surface
         range_of_view = orbit_altitude * np.tan(field_of_view / 2)

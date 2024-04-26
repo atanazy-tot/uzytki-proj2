@@ -1,20 +1,20 @@
 from shapely.ops import cascaded_union
 from shapely.geometry import Polygon
-
+from shapely import unary_union
 
 class CoverageSimulator:
-    def __init__(self, satellites):
-        self.satellites = satellites
+    def __init__(self, constellation):
+        self.constellation = constellation
 
     def calculate_coverage(self):
         tot_area = []
-        for satellite in self.satelites:
+        for satellite in self.constellation:
             for i in range(len(satellite.sat_trajectory)):
-                altitude, latitude, longitude = satellite.sat_trajectory[i]
+                latitude, longitude, altitude = satellite.sat_trajectory[i]
                 area = satellite.observe_shapely(altitude, latitude, longitude)
-                tot_area.append(area)
-
-        total_area_polygon = cascaded_union(tot_area)
+                for polygon in area:
+                    tot_area.append(polygon)
+        total_area_polygon = unary_union(tot_area)
 
         # Calculate the total area covered by the photos
         total_area_covered = total_area_polygon.area

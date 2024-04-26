@@ -4,16 +4,15 @@ import numpy as np
 from src.models.satellite import Satellite
 from src.simulation.coverage import CoverageSimulator
 
+
 class GeneticAlgorithm:
     def __init__(self,
                  planet,
-                 start_time,
-                 end_time,
-                 time_step,
                  constellation_size: int,
                  popSize: int,
                  numParents: int,
                  pm: float,
+                 time_span = 900,
                  k: int = 2,
                  numIterations: int = 100):
 
@@ -21,16 +20,14 @@ class GeneticAlgorithm:
 
         self.planet = planet
         self.ground_stations = self.planet.ground_stations
-        self.start_time = start_time
-        self.end_time = end_time
-        self.time_step = time_step
         self.constellation_size = constellation_size
         self.popSize = popSize
         self.numParents = numParents
-        self.pm = pm # prob. of mutation
-        self.k = k # for parent selection
+        self.pm = pm  # prob. of mutation
+        self.time_span = time_span
+        self.k = k  # for parent selection
         self.numIterations = numIterations
-        self.minimize = False # min/max evaluation function
+        self.minimize = False  # min/max evaluation function
 
     def random_satellite(self):
         semi_major_axis = random.uniform(self.planet.hs_lower_bound, self.planet.hs_upper_bound)
@@ -39,12 +36,12 @@ class GeneticAlgorithm:
         raan = random.uniform(0, 2 * math.pi)
         arg_of_perigee = random.uniform(0, 2 * math.pi)
         true_anomaly = random.uniform(0, 2 * math.pi)
-        satellite = Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly, self.planet)
+        satellite = Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly, self.planet, self.time_span)
         satellite.update_position(random.choice(range(len(satellite.ground_track))))
 
         return satellite
 
-    def evaluation(self, constellation): # In our case, we want to maximize coverage
+    def evaluation(self, constellation):  # In our case, we want to maximize coverage
         self.minimize = False
         c = CoverageSimulator(constellation)
         result = c.calculate_coverage()
@@ -53,7 +50,7 @@ class GeneticAlgorithm:
     def mutation(self, constellation):
         for satellite in constellation:
             p = random.random()
-            if p < self.pm: # pm - prob. of mutation
+            if p < self.pm:  # pm - prob. of mutation
                 satellite.semi_major_axis += random.uniform(-10000, 10000)
                 satellite.semi_major_axis = max(min(satellite.semi_major_axis, satellite.planet.hs_upper_bound), satellite.planet.hs_lower_bound)
                 satellite.eccentricity += random.gauss(0, 0.01)
@@ -66,23 +63,21 @@ class GeneticAlgorithm:
 
         return constellation
 
-    def cross(self, parent_1, parent_2): # one point crossover
-        crossover_point = random.randint(0, len(parent_1)) # parents have the same length (no. satellites)
+    def cross(self, parent_1, parent_2):  # one point crossover
+        crossover_point = random.randint(0, len(parent_1))  # parents have the same length (no. satellites)
 
         child_1 = parent_1[:crossover_point] + parent_2[crossover_point:]
         child_2 = parent_2[:crossover_point] + parent_1[crossover_point:]
 
         return child_1, child_2
 
-
-
-    def select_parents(self, fitness): # tournament selection
+    def select_parents(self, fitness):  # tournament selection
         """
         Draws k individuals and returns the best one
         fitness -- fitness matrix for population
         """
         candidates = random.sample(range(self.popSize), self.k)
-        best_candidate = np.min(candidates, key=lambda x: fitness[x]) if self.minimize else max(candidates,
+        best_candidate = min(candidates, key=lambda x: fitness[x]) if self.minimize else max(candidates,
                                                                                              key=lambda x: fitness[x])
         return best_candidate
 
@@ -90,14 +85,13 @@ class GeneticAlgorithm:
         """
         finds survivors
         """
-        current_generation = population.extend(offspring)
-        fitness_generation = fitness.extend(fitness_offspring)
-
-        order = sorted(range(len(fitness_generation)), key=lambda k: fitness_generation[k])
+        population.extend(offspring)
+        fitness.extend(fitness_offspring)
+        order = sorted(range(len(fitness)), key=lambda k: fitness[k])
 
         # Select the top individuals based on the fitness scores
-        survivors = [current_generation[i] for i in order[:self.popSize]]
-        fitness_survivors = [fitness_generation[i] for i in order[:self.popSize]]
+        survivors = [population[i] for i in order[:self.popSize]]
+        fitness_survivors = [fitness[i] for i in order[:self.popSize]]
 
         return survivors, fitness_survivors
 
@@ -111,14 +105,16 @@ class GeneticAlgorithm:
         '''
 
         # Initial population
-        population = [self.random_satellite() for _ in range(self.constellation_size)]
+        print("Initializing population...")
+        population = [[self.random_satellite() for _ in range(self.constellation_size)] for _ in range(self.popSize)]
+        print("Calculating fitness...")
         fitness = [self.evaluation(constellation) for constellation in population]
-        print("Initial:", "min = ", np.min(fitness), ", max = ", np.max(fitness), ", average = ", np.mean(fitness))
+        print("Initial:", "min = ", min(fitness), ", max = ", max(fitness), ", average = ", sum(fitness)/len(fitness))
 
         # Main loop. Stop criterion: number of iterations
         for num_it in range(self.numIterations):
             if stop_crit and (
-                    (self.minimize and np.min(fitness) == stop_value) or (not self.minimize and np.max(fitness) == stop_value)):
+                    (self.minimize and min(fitness) == stop_value) or (not self.minimize and max(fitness) == stop_value)):
                 break
 
             offspring = []
@@ -145,9 +141,11 @@ class GeneticAlgorithm:
             population, fitness = self.survival(population, fitness, offspring, fitness_offspring)
 
             # Print info
-            print("Iteration ", num_it, ": min = ", np.min(fitness), ", max = ", np.max(fitness), ", average = ",
+            print("Iteration ", num_it, ": min = ", min(fitness), ", max = ", max(fitness), ", average = ",
                   np.mean(fitness))
 
-        arg = np.argmin(fitness) if self.minimize else np.argmax(fitness)
+        # arg = np.argmin(fitness) if self.minimize else np.argmax(fitness)
+        arg = fitness.index(min(fitness)) if self.minimize else fitness.index(max(fitness))
 
         return population[arg]
+
