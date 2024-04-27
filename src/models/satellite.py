@@ -142,7 +142,7 @@ class Satellite(Orbit):
     def __str__(self):
         return f'''Satellite object with orbit parameters: semi_major_axis = {self.semi_major_axis}, 
         eccentricity = {self.eccentricity}, inclination = {self.inclination}, raan = {self.raan},
-        arg_of_perigee = {self.arg_of_perigee}, true_anomaly = {self.true_anomaly},  planet = {self.planet},
+        arg_of_perigee = {self.arg_of_perigee}, true_anomaly = {self.true_anomaly},  planet = {self.planet.name},
         swath_width = {self.swath_width}, translation_factor = {self.translation_factor}, time_span = {self.time_span}'''
 
     def update_position(self, new_factor):

@@ -41,6 +41,11 @@ earth = Planet(
     hs_upper_bound=6371e3+800,
 )
 
+earth.add_ground_station("North", 90, 0)
+earth.add_ground_station("South", 90, 0)
+earth.add_ground_station("Equator 1", 0, 0)
+earth.add_ground_station("Equator 2", 0, 180)
+
 moon = Planet(
     name="Moon",
     radius=17371e2,  # in meters
@@ -48,8 +53,8 @@ moon = Planet(
     rotation_period=2360591.6,
     j2=202.7e-6,
     angular_velocity=2.6617e-6,
-    hs_lower_bound=0,
-    hs_upper_bound=0,
+    hs_lower_bound=None,
+    hs_upper_bound=None,
 )
 
 # Now, both 'earth' and 'moon' objects carry their unique physical constants

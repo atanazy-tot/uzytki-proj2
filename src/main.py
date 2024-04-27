@@ -1,22 +1,19 @@
 from optimization.genetic_algorithm import GeneticAlgorithm
-from models.planet import earth, moon
-
-earth.add_ground_station("North", 90, 0)
-earth.add_ground_station("South", 90, 0)
-earth.add_ground_station("Equator 1", 0, 0)
-earth.add_ground_station("Equator 2", 0, 180)
+from models.planet import earth
 
 gen_alg = GeneticAlgorithm(planet=earth,
-                           constellation_size=4,
-                           popSize=4,
+                           constellation_size=30,
+                           popSize=20,
                            numParents=8,
                            pm=0.3,
-                           time_span=900,
+                           time_span=10800,
                            swath_width=800,
-                           numIterations=3,
+                           numIterations=25,
 )
 
-gen_alg.geneticAlgorithm(cross_1_point=False)  # use bit flip
+gen_alg.geneticAlgorithm(cross_1_point=False, file_name = "sat_params_30.txt")  # use bit flip
+
+# Print orbital parameters for the best constellation
 print("final constellation:\n")
 
 for i, satellite in enumerate(gen_alg.best_constellation):

@@ -117,11 +117,14 @@ class GeneticAlgorithm:
     def geneticAlgorithm(self,
                          cross_1_point: bool = False,
                          stop_crit: bool = True,
-                         stop_value: float = 1.0):
+                         stop_value: float = 1.0,
+                         file_name = None):
         '''
         Genetic algorithm
+        cross_1_point -- if True, 1 point crossover is used; otherwise, bit-flip is used.
         stop_crit -- True if the algorithm should be stopped when a certain value is reached
         stop_value -- the value for which the algorithm stops, when stop_crit = True
+        file_name -- if provided, the parameters of the best constellation are saved (in the file provided)
         '''
 
         # Initial population
@@ -170,15 +173,16 @@ class GeneticAlgorithm:
             arg = fitness.index(min(fitness)) if self.minimize else fitness.index(max(fitness))
             self.best_constellation = population[arg]
 
-            # for printing orbit parameters
-            # Open the file in write mode to erase its contents
-            with open("sat_params.txt", "w") as f:
-                pass  # Do nothing
+            # for saving orbit parameters
+            if file_name is not None:
+                with open(file_name, "w") as f:
+                    pass  # Do nothing
 
-            # Now open the file in append mode to add new data
-            with open("sat_params.txt", "a") as f:
-                for s in self.best_constellation:
-                    f.write(str(s) + '\n')  # Convert to string and append
+                with open(file_name, "a") as f:
+                    for s in self.best_constellation:
+                        f.write(str(s.semi_major_axis) + " " + str(s.eccentricity) + " " + str(s.inclination) + " " +
+                                str(s.raan) + " " + str(s.arg_of_perigee) + " " + str(s.true_anomaly) + " " +
+                                str(s.translation_factor) + '\n')
 
         arg = fitness.index(min(fitness)) if self.minimize else fitness.index(max(fitness))
         return population[arg]
