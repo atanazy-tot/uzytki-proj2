@@ -139,6 +139,12 @@ class Satellite(Orbit):
         self.time_span = time_span  # time span for calculating the satellite's trajectory (900s = 15mins)
         self.sat_trajectory = self.calculate_sat_trajectory()
 
+    def __str__(self):
+        return f'''Satellite object with orbit parameters: semi_major_axis = {self.semi_major_axis}, 
+        eccentricity = {self.eccentricity}, inclination = {self.inclination}, raan = {self.raan},
+        arg_of_perigee = {self.arg_of_perigee}, true_anomaly = {self.true_anomaly},  planet = {self.planet},
+        swath_width = {self.swath_width}, translation_factor = {self.translation_factor}, time_span = {self.time_span}'''
+
     def update_position(self, new_factor):
         self.translation_factor = new_factor % len(self.ground_track)
         self.position = self.ground_track[self.translation_factor]

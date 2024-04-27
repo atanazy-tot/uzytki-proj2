@@ -13,6 +13,7 @@ class GeneticAlgorithm:
                  numParents: int,
                  pm: float,
                  time_span = 900,
+                 swath_width = 800,
                  k: int = 2,
                  numIterations: int = 100):
 
@@ -28,6 +29,8 @@ class GeneticAlgorithm:
         self.k = k  # for parent selection
         self.numIterations = numIterations
         self.minimize = False  # min/max evaluation function
+        self.swath_width = swath_width
+        self.best_constellation = None
 
     def random_satellite(self):
         semi_major_axis = random.uniform(self.planet.hs_lower_bound, self.planet.hs_upper_bound)
@@ -36,7 +39,9 @@ class GeneticAlgorithm:
         raan = random.uniform(0, 2 * math.pi)
         arg_of_perigee = random.uniform(0, 2 * math.pi)
         true_anomaly = random.uniform(0, 2 * math.pi)
-        satellite = Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly, self.planet, self.time_span)
+        translation_factor = np.random.randint(0, 5000)
+        satellite = Satellite(semi_major_axis, eccentricity, inclination, raan, arg_of_perigee, true_anomaly,
+                              self.planet, self.swath_width, translation_factor, self.time_span)
         satellite.update_position(random.choice(range(len(satellite.ground_track))))
 
         return satellite
@@ -63,11 +68,22 @@ class GeneticAlgorithm:
 
         return constellation
 
-    def cross(self, parent_1, parent_2):  # one point crossover
+    def cross_1_point(self, parent_1, parent_2):  # one point crossover
         crossover_point = random.randint(0, len(parent_1))  # parents have the same length (no. satellites)
 
         child_1 = parent_1[:crossover_point] + parent_2[crossover_point:]
         child_2 = parent_2[:crossover_point] + parent_1[crossover_point:]
+
+        return child_1, child_2
+
+    def cross_bit_flip(self, parent_1, parent_2):  # bit flip crossover
+        child_1 = parent_1.copy()
+        child_2 = parent_2.copy()
+
+        for satellite in range(self.constellation_size):
+            p = random.random()
+            if p < 0.5:
+                child_1[satellite], child_2[satellite] = child_2[satellite], child_1[satellite]
 
         return child_1, child_2
 
@@ -87,7 +103,10 @@ class GeneticAlgorithm:
         """
         population.extend(offspring)
         fitness.extend(fitness_offspring)
-        order = sorted(range(len(fitness)), key=lambda k: fitness[k])
+        if self.minimize:
+            order = sorted(range(len(fitness)), key=lambda k: fitness[k])
+        else:
+            order = sorted(range(len(fitness)), key=lambda k: -fitness[k])
 
         # Select the top individuals based on the fitness scores
         survivors = [population[i] for i in order[:self.popSize]]
@@ -96,6 +115,7 @@ class GeneticAlgorithm:
         return survivors, fitness_survivors
 
     def geneticAlgorithm(self,
+                         cross_1_point: bool = False,
                          stop_crit: bool = True,
                          stop_value: float = 1.0):
         '''
@@ -125,7 +145,10 @@ class GeneticAlgorithm:
                 parent_2 = population[self.select_parents(fitness)]
 
                 # Crossover
-                child_1, child_2 = self.cross(parent_1, parent_2)
+                if cross_1_point:
+                    child_1, child_2 = self.cross_1_point(parent_1, parent_2)
+                else:
+                    child_1, child_2 = self.cross_bit_flip(parent_1, parent_2)
 
                 # Mutation
                 child_1 = self.mutation(child_1)
@@ -142,10 +165,21 @@ class GeneticAlgorithm:
 
             # Print info
             print("Iteration ", num_it, ": min = ", min(fitness), ", max = ", max(fitness), ", average = ",
-                  np.mean(fitness))
+                  sum(fitness)/len(fitness))
 
-        # arg = np.argmin(fitness) if self.minimize else np.argmax(fitness)
+            arg = fitness.index(min(fitness)) if self.minimize else fitness.index(max(fitness))
+            self.best_constellation = population[arg]
+
+            # for printing orbit parameters
+            # Open the file in write mode to erase its contents
+            with open("sat_params.txt", "w") as f:
+                pass  # Do nothing
+
+            # Now open the file in append mode to add new data
+            with open("sat_params.txt", "a") as f:
+                for s in self.best_constellation:
+                    f.write(str(s) + '\n')  # Convert to string and append
+
         arg = fitness.index(min(fitness)) if self.minimize else fitness.index(max(fitness))
-
         return population[arg]
 
